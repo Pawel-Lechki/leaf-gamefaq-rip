@@ -2,6 +2,7 @@
 
 namespace App\Controllers;
 
+use DateTime;
 use Symfony\Component\HttpClient\HttpClient;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -21,6 +22,7 @@ class FetchGamesController extends Controller
 
         $games = [];
         $page = 0;
+        $totalPages = 1;
 
         do {
 
@@ -40,6 +42,11 @@ class FetchGamesController extends Controller
             @$dom->loadHTML($content);
 
             $xpath = new \DOMXPath($dom);
+            if ($page === 0) {
+                $pageOptions = $xpath->query('//ul[@class="paginate"]//select[@id="pagejump"]/option');
+                $totalPages = $pageOptions->length;
+            }
+
             $gamesNode = $xpath->query('//td[@class="rtitle"]/a');
 
             if ($gamesNode->length === 0) {
@@ -55,9 +62,9 @@ class FetchGamesController extends Controller
                     $games[] = $gameData;
                 }
             }
-            $nextPageLink = $xpath->query('//ul[@class="paginate"]/li/a[contains(text(), "Next")]');
+//            $nextPageLink = $xpath->query('//ul[@class="paginate"]/li/a[contains(text(), "Next")]');
             $page++;
-        } while ($nextPageLink->length > 0);
+        } while ($page < $totalPages);
 
         $this->generateXlsx($games);
 //        return response()->json($games);
@@ -113,7 +120,22 @@ class FetchGamesController extends Controller
 //        $name = $this->getXPathText($xpath, '//h1[@class="page-title"]');
         $platform = $this->getXPathText($xpath, '//ol[@class="list flex col1 nobg"]//li[1]//b[contains(text(), "Platform")]/following-sibling::a');
         $genre = $this->getXPathTextArray($xpath, '//ol[@class="list flex col1 nobg"]//li[2]//b[contains(text(), "Genre")]/following-sibling::a');
-        $developer = $this->getXPathText($xpath, '//ol[@class="list flex col1 nobg"]//li[3]//b[contains(text(), "Developer/Publisher")]/following-sibling::a');
+
+        // Obsługa różnych przypadków Developer i Publisher
+        $developer = '';
+        $publisher = '';
+
+        // Obsługa Developer/Publisher w jednym
+        $devPubCombined = $xpath->query('//div[@class="content"]/b[contains(text(), "Developer/Publisher")]/following-sibling::a');
+        if ($devPubCombined->length > 0) {
+            $developer = trim($devPubCombined->item(0)->textContent);
+            $publisher = $developer; // W tym przypadku zakładamy, że deweloper jest też wydawcą
+        } else {
+            // Developer i Publisher osobno
+            $developer = getXPathText($xpath, '//div[@class="content"]/b[contains(text(), "Developer")]/following-sibling::a');
+            $publisher = getXPathText($xpath, '//div[@class="content"]/b[contains(text(), "Publisher")]/following-sibling::a');
+        }
+
         $releaseDate = $this->formatDate($this->getXPathText($xpath, '//ol[@class="list flex col1 nobg"]//li[4]//b[contains(text(), "Release")]/following-sibling::a'));
 
         return [
@@ -125,8 +147,8 @@ class FetchGamesController extends Controller
             'genre3' => $genre[2] ?? 'N/A',
             'genre4' => $genre[3] ?? 'N/A',
             'release_date' => $releaseDate,
-            'developer' => $developer,
-            'publisher' => $developer,
+            'developer' => $developer ?: 'N/A',
+            'publisher' => $publisher ?: 'N/A',
         ];
     }
 
@@ -148,8 +170,20 @@ class FetchGamesController extends Controller
 
     private function formatDate(string $date): string
     {
-        $formattedDate = DateTime::createFromFormat('F j, Y', $date); // Przyjmuje, że format jest "Miesiąc dzień, rok"
-        return $formattedDate ? $formattedDate->format('d.m.Y') : 'N/A';
+        // Sprawdzenie różnych formatów daty
+        if (preg_match('/^(\w+) (\d{1,2}), (\d{4})$/', $date, $matches)) {
+            // Format: Miesiąc dzień, rok → dd.mm.rrrr
+            $formattedDate = DateTime::createFromFormat('F j, Y', $date);
+            return $formattedDate ? $formattedDate->format('d.m.Y') : 'N/A';
+        } elseif (preg_match('/^(\w+), (\d{4})$/', $date, $matches)) {
+            // Format: Miesiąc, rok → 01.mm.rrrr
+            $formattedDate = DateTime::createFromFormat('F, Y', $date);
+            return $formattedDate ? '01.' . $formattedDate->format('m.Y') : 'N/A';
+        } elseif (preg_match('/^(\d{4})$/', $date, $matches)) {
+            // Format: rok → 01.01.rrrr
+            return '01.01.' . $matches[1];
+        }
+        return 'N/A';
     }
 
     private function generateXlsx(array $games)
