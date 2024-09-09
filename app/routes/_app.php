@@ -5,3 +5,4 @@ app()->get('/', function () {
 });
 
 app()->get('/fetch-games', 'FetchGamesController@fetchGames');
+app()->get('/fetch-games-page', 'FetchGamesController@fetchGamesPage');
