@@ -171,18 +171,23 @@ class FetchGamesController extends Controller
     private function formatDate(string $date): string
     {
         // Sprawdzenie różnych formatów daty
-        if (preg_match('/^(\w+) (\d{1,2}), (\d{4})$/', $date, $matches)) {
-            // Format: Miesiąc dzień, rok → dd.mm.rrrr
+        // Sprawdzenie dla formatu: Miesiąc dzień, rok (np. March 15, 2022)
+        if (preg_match('/^([A-Za-z]+) (\d{1,2}), (\d{4})$/', $date, $matches)) {
             $formattedDate = DateTime::createFromFormat('F j, Y', $date);
             return $formattedDate ? $formattedDate->format('d.m.Y') : 'N/A';
-        } elseif (preg_match('/^(\w+), (\d{4})$/', $date, $matches)) {
-            // Format: Miesiąc, rok → 01.mm.rrrr
+        }
+
+        // Sprawdzenie dla formatu: Miesiąc, rok (np. March, 2022)
+        if (preg_match('/^([A-Za-z]+), (\d{4})$/', $date, $matches)) {
             $formattedDate = DateTime::createFromFormat('F, Y', $date);
             return $formattedDate ? '01.' . $formattedDate->format('m.Y') : 'N/A';
-        } elseif (preg_match('/^(\d{4})$/', $date, $matches)) {
-            // Format: rok → 01.01.rrrr
+        }
+
+        // Sprawdzenie dla formatu: rok (np. 2022)
+        if (preg_match('/^(\d{4})$/', $date, $matches)) {
             return '01.01.' . $matches[1];
         }
+
         return 'N/A';
     }
 
