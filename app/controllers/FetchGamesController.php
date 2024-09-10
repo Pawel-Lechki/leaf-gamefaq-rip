@@ -132,11 +132,17 @@ class FetchGamesController extends Controller
             $publisher = $developer; // W tym przypadku zakładamy, że deweloper jest też wydawcą
         } else {
             // Developer i Publisher osobno
-            $developer = getXPathText($xpath, '//div[@class="content"]/b[contains(text(), "Developer")]/following-sibling::a');
-            $publisher = getXPathText($xpath, '//div[@class="content"]/b[contains(text(), "Publisher")]/following-sibling::a');
+            $developer = $this->getXPathText($xpath, '//div[@class="content"]/b[contains(text(), "Developer")]/following-sibling::a');
+            $publisher = $this->getXPathText($xpath, '//div[@class="content"]/b[contains(text(), "Publisher")]/following-sibling::a');
         }
 
-        $releaseDate = $this->formatDate($this->getXPathText($xpath, '//ol[@class="list flex col1 nobg"]//li[4]//b[contains(text(), "Release")]/following-sibling::a'));
+//        $releaseDate = $this->formatDate($this->getXPathText($xpath, '//ol[@class="list flex col1 nobg"]//li[4]//b[contains(text(), "Release")]/following-sibling::a'));
+//        $releaseDate = $this->formatDate($this->getXPathText($xpath, '//div[@class="content"]/b[contains(text(), "Release:")]/following-sibling::a'));
+//        $releaseDate = $this->formatDate($this->getXPathText($xpath, '//div[@class="content"]/b[contains(text(), "Release:")]/following-sibling::a[1]'));
+
+        $dateText = $this->getXPathText($xpath, '//div[@class="content"]/b[contains(text(), "Release:")]/following-sibling::a[1]');
+//        echo "Pobrana data: $dateText\n"; // Debugowanie
+        $releaseDate = $this->formatDate($dateText);
 
         return [
             'name' => $gameName,
@@ -170,24 +176,28 @@ class FetchGamesController extends Controller
 
     private function formatDate(string $date): string
     {
-        // Sprawdzenie różnych formatów daty
-        // Sprawdzenie dla formatu: Miesiąc dzień, rok (np. March 15, 2022)
+        if (stripos($date, 'Canceled') !== false) {
+            return 'Canceled';
+        }
+        /// Sprawdzenie dla formatu: Miesiąc dzień, rok (np. March 15, 2022)
         if (preg_match('/^([A-Za-z]+) (\d{1,2}), (\d{4})$/', $date, $matches)) {
             $formattedDate = DateTime::createFromFormat('F j, Y', $date);
             return $formattedDate ? $formattedDate->format('d.m.Y') : 'N/A';
         }
 
-        // Sprawdzenie dla formatu: Miesiąc, rok (np. March, 2022)
-        if (preg_match('/^([A-Za-z]+), (\d{4})$/', $date, $matches)) {
-            $formattedDate = DateTime::createFromFormat('F, Y', $date);
+        // Sprawdzenie dla formatu: Miesiąc, rok (np. February 2005)
+        if (preg_match('/^([A-Za-z]+) (\d{4})$/', $date, $matches)) {
+            $formattedDate = DateTime::createFromFormat('F Y', $date);
             return $formattedDate ? '01.' . $formattedDate->format('m.Y') : 'N/A';
         }
 
-        // Sprawdzenie dla formatu: rok (np. 2022)
+        // Sprawdzenie dla formatu: rok (np. 2005)
         if (preg_match('/^(\d{4})$/', $date, $matches)) {
             return '01.01.' . $matches[1];
         }
 
+        // Debugowanie w przypadku nieudanego dopasowania
+//        echo "Nieznany format daty: $date\n";
         return 'N/A';
     }
 
